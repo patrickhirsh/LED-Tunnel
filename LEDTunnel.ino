@@ -29,6 +29,24 @@
 #include <power_mgt.h>
 #include <math.h>
 
+
+/* 
+    LED-Tunnel
+
+    Drives WS2812B leds with an Arduino.
+    Designed for use with LEDs arranged in a series of arches, forming a tunnel.
+
+    Usage:
+        1. Specify the LED Data pin used on the arduino for controlling the LEDs.
+        2. Specify the strip (arch) size and count for your tunnel. The sequences will scale automatically to these values
+        3. Tweak the various sequences by changing the sequence variables in each sequence config section below (colors, animation speed, etc.)
+
+    NOTE: All CHSV colors are specified by (Hue, Saturation, Value) in 0-255 value ranges.
+    Keep this in mind when picking hue values, as hue is usually described on a scale of 0-360.
+    See FastLED's docs here: https://github.com/FastLED/FastLED/wiki/FastLED-HSV-Colors
+*/
+
+
 // -------------------- CONFIG -------------------- //
 
 // LED Data pin used on the Arduino
@@ -39,6 +57,30 @@
 
 // Number of LEDs per strip (ring) in the light tunnel
 #define NUM_STRIP_LEDS 10
+
+
+// -------------------- RING CHASE SEQUENCE CONFIG -------------------- //
+
+// number of pulse colors to use
+const int S_RING_CHASE_NUM_PULSE_COLORS = 3;
+
+// pulse colors to cycle through during ring chase
+const CHSV S_RING_CHASE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = { 
+    CHSV(190, 255, 255), 
+    CHSV(30, 255, 255), 
+    CHSV(96, 255, 255) 
+};
+
+// frequency at which new pulses occur; larger == less frequent
+const int S_RING_CHASE_PULSE_FREQUENCY = 400;
+
+// pulse brightness falloff intensity (how fast does the pulse disappear?); larger == faster falloff
+const int S_RING_CHASE_FALLOF_RATE = 1;
+
+// ring shift frequency (frequency in ticks at which the pulse is echoed down the tunnel); larger == more delay (longer "echo")
+const int S_RING_CHASE_RING_SHIFT_FREQUENCY = 17;
+
+
 
 // -------------------- Globals -------------------- //
 
@@ -69,25 +111,6 @@ LEDSequence::~LEDSequence() {}
 
 // ==================== S_RingChase ==================== //
 
-// number of pulse colors to use
-const int NUM_PULSE_COLORS = 3;
-
-// pulse colors to cycle through during ring chase
-const CHSV RING_CHASE_COLORS[NUM_PULSE_COLORS] = { 
-    CHSV(190, 255, 255), 
-    CHSV(30, 255, 255), 
-    CHSV(96, 255, 255) 
-};
-
-// frequency at which new pulses occur; larger == less frequent
-const int PULSE_FREQUENCY = 400;
-
-// pulse brightness falloff intensity (how fast does the pulse disappear?); larger == faster falloff
-const int PULSE_FALLOFF_RATE = 1;
-
-// ring shift frequency (frequency in ticks at which the pulse is echoed down the tunnel); larger == more delay (longer "echo")
-const int RING_SHIFT_FREQUENCY = 17;
-
 class S_RingChase : public LEDSequence
 {
     private:
@@ -106,7 +129,7 @@ class S_RingChase : public LEDSequence
                 buffer[i] = CHSV(
                     buffer[i].h, 
                     buffer[i].s, 
-                    buffer[i].v - PULSE_FALLOFF_RATE < 0 ? 0 : buffer[i].v - PULSE_FALLOFF_RATE);
+                    buffer[i].v - S_RING_CHASE_FALLOF_RATE < 0 ? 0 : buffer[i].v - S_RING_CHASE_FALLOF_RATE);
             }
 
             // are we actively pulsing down the tunnel?
@@ -115,9 +138,9 @@ class S_RingChase : public LEDSequence
                 // pulse the next ring!
                 for (int i = 0; i < NUM_STRIP_LEDS; i++)
                 {
-                    buffer[GetStrip(pulseRingIndex) + i] = RING_CHASE_COLORS[pulseColorIndex];
+                    buffer[GetStrip(pulseRingIndex) + i] = S_RING_CHASE_COLORS[pulseColorIndex];
                 }
-                pulseRingShiftTimer = RING_SHIFT_FREQUENCY;
+                pulseRingShiftTimer = S_RING_CHASE_RING_SHIFT_FREQUENCY;
                 pulseRingIndex++;
             }
             pulseRingShiftTimer--;
@@ -128,13 +151,13 @@ class S_RingChase : public LEDSequence
                 // Pulse!
                 for (int i = 0; i < NUM_STRIP_LEDS; i++)
                 {
-                    buffer[i] = RING_CHASE_COLORS[pulseColorIndex];
+                    buffer[i] = S_RING_CHASE_COLORS[pulseColorIndex];
                 }
 
-                pulseTimer = PULSE_FREQUENCY;
+                pulseTimer = S_RING_CHASE_PULSE_FREQUENCY;
                 pulseRingIndex = 0;
                 pulseRingShiftTimer = 0;
-                pulseColorIndex = pulseColorIndex + 1 >= NUM_PULSE_COLORS ? 0 : pulseColorIndex + 1;
+                pulseColorIndex = pulseColorIndex + 1 >= S_RING_CHASE_NUM_PULSE_COLORS ? 0 : pulseColorIndex + 1;
             }
             pulseTimer--;
         }
