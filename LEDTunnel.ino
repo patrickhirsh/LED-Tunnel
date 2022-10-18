@@ -56,7 +56,7 @@
 #define NUM_STRIPS 8
 
 // Number of LEDs per strip (ring) in the light tunnel
-#define NUM_STRIP_LEDS 10
+#define NUM_STRIP_LEDS 150
 
 
 // -------------------- RING CHASE SEQUENCE CONFIG -------------------- //
@@ -72,13 +72,13 @@ const CHSV S_RING_CHASE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = {
 };
 
 // frequency at which new pulses occur; larger == less frequent
-const int S_RING_CHASE_PULSE_FREQUENCY = 400;
+const int S_RING_CHASE_PULSE_FREQUENCY = 50;
 
 // pulse brightness falloff intensity (how fast does the pulse disappear?); larger == faster falloff
-const int S_RING_CHASE_FALLOF_RATE = 1;
+const int S_RING_CHASE_FALLOF_RATE = 8;
 
 // ring shift frequency (frequency in ticks at which the pulse is echoed down the tunnel); larger == more delay (longer "echo")
-const int S_RING_CHASE_RING_SHIFT_FREQUENCY = 17;
+const int S_RING_CHASE_RING_SHIFT_FREQUENCY = 1;
 
 
 
@@ -86,9 +86,6 @@ const int S_RING_CHASE_RING_SHIFT_FREQUENCY = 17;
 
 // the actual FastLED led array
 CRGB leds[NUM_STRIP_LEDS * NUM_STRIPS];
-
-// HSV staging buffer before final write to FastLED's array
-CHSV buffer[NUM_STRIP_LEDS * NUM_STRIPS];
 
 // get the index of the beginning of a strip by strip index
 int GetStrip(int stripIndex) { return stripIndex * NUM_STRIP_LEDS; }
@@ -114,6 +111,8 @@ LEDSequence::~LEDSequence() {}
 class S_RingChase : public LEDSequence
 {
     private:
+        CHSV rings[NUM_STRIPS];
+
         int pulseTimer = 0;
         int pulseRingShiftTimer = 0;
         int pulseRingIndex = 0;
@@ -121,25 +120,36 @@ class S_RingChase : public LEDSequence
 
     public:   
         ~S_RingChase() {}
+        S_RingChase()
+        {
+            for (int i = 0; i < NUM_STRIPS; i++)
+            {
+                rings[i] = S_RING_CHASE_COLORS[pulseColorIndex];
+            }
+        }
         void Update()
         {
             // apply constant falloff on entire strip
-            for (int i = 0; i < NUM_STRIP_LEDS * NUM_STRIPS; i++)
+            for (int i = 0; i < NUM_STRIPS; i++)
             {
-                buffer[i] = CHSV(
-                    buffer[i].h, 
-                    buffer[i].s, 
-                    buffer[i].v - S_RING_CHASE_FALLOF_RATE < 0 ? 0 : buffer[i].v - S_RING_CHASE_FALLOF_RATE);
+                rings[i] = CHSV(
+                    rings[i].h, 
+                    rings[i].s, 
+                    rings[i].v - S_RING_CHASE_FALLOF_RATE < 0 ? 0 : rings[i].v - S_RING_CHASE_FALLOF_RATE);
+            }
+            for (int i = 0; i < NUM_STRIPS; i++)
+            {
+                for (int j = 0; j < NUM_STRIP_LEDS; j++)
+                {
+                    leds[GetStrip(i) + j] = rings[i];
+                }
             }
 
             // are we actively pulsing down the tunnel?
             if (pulseRingShiftTimer <= 0 && pulseRingIndex < NUM_STRIPS) 
             {
                 // pulse the next ring!
-                for (int i = 0; i < NUM_STRIP_LEDS; i++)
-                {
-                    buffer[GetStrip(pulseRingIndex) + i] = S_RING_CHASE_COLORS[pulseColorIndex];
-                }
+                rings[pulseRingIndex] = S_RING_CHASE_COLORS[pulseColorIndex];
                 pulseRingShiftTimer = S_RING_CHASE_RING_SHIFT_FREQUENCY;
                 pulseRingIndex++;
             }
@@ -149,11 +159,7 @@ class S_RingChase : public LEDSequence
             if (pulseTimer <= 0)
             {
                 // Pulse!
-                for (int i = 0; i < NUM_STRIP_LEDS; i++)
-                {
-                    buffer[i] = S_RING_CHASE_COLORS[pulseColorIndex];
-                }
-
+                rings[0] = S_RING_CHASE_COLORS[pulseColorIndex];
                 pulseTimer = S_RING_CHASE_PULSE_FREQUENCY;
                 pulseRingIndex = 0;
                 pulseRingShiftTimer = 0;
@@ -192,13 +198,5 @@ void setup()
 void loop() 
 {
     Sequences[ledSequence]->Update();
-
-    // flush buffer to LED array
-    for (int i = 0; i < NUM_STRIP_LEDS * NUM_STRIPS; i++)
-    {
-        leds[i] = buffer[i];
-    }
-
     FastLED.show();
 }
-
