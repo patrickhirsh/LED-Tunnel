@@ -72,7 +72,7 @@ const CHSV S_RING_CHASE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = {
 };
 
 // frequency at which new pulses occur; larger == less frequent
-const int S_RING_CHASE_PULSE_FREQUENCY = 50;
+const int S_RING_CHASE_PULSE_FREQUENCY = 40;
 
 // pulse brightness falloff intensity (how fast does the pulse disappear?); larger == faster falloff
 const int S_RING_CHASE_FALLOF_RATE = 8;
@@ -129,6 +129,28 @@ class S_RingChase : public LEDSequence
         }
         void Update()
         {
+            // is it time to start another pulse chain?
+            if (pulseTimer <= 0)
+            {
+                // Pulse!
+                rings[0] = S_RING_CHASE_COLORS[pulseColorIndex];
+                pulseTimer = S_RING_CHASE_PULSE_FREQUENCY;
+                pulseRingIndex = 0;
+                pulseRingShiftTimer = 0;
+                pulseColorIndex = pulseColorIndex + 1 >= S_RING_CHASE_NUM_PULSE_COLORS ? 0 : pulseColorIndex + 1;
+            }
+            pulseTimer--;
+
+            // are we actively pulsing down the tunnel?
+            if (pulseRingShiftTimer <= 0 && pulseRingIndex < NUM_STRIPS) 
+            {
+                // pulse the next ring!
+                rings[pulseRingIndex] = S_RING_CHASE_COLORS[pulseColorIndex];
+                pulseRingShiftTimer = S_RING_CHASE_RING_SHIFT_FREQUENCY;
+                pulseRingIndex++;
+            }
+            pulseRingShiftTimer--;
+
             // apply constant falloff on entire strip
             for (int i = 0; i < NUM_STRIPS; i++)
             {
@@ -144,28 +166,6 @@ class S_RingChase : public LEDSequence
                     leds[GetStrip(i) + j] = rings[i];
                 }
             }
-
-            // are we actively pulsing down the tunnel?
-            if (pulseRingShiftTimer <= 0 && pulseRingIndex < NUM_STRIPS) 
-            {
-                // pulse the next ring!
-                rings[pulseRingIndex] = S_RING_CHASE_COLORS[pulseColorIndex];
-                pulseRingShiftTimer = S_RING_CHASE_RING_SHIFT_FREQUENCY;
-                pulseRingIndex++;
-            }
-            pulseRingShiftTimer--;
-
-            // is it time to start another pulse chain?
-            if (pulseTimer <= 0)
-            {
-                // Pulse!
-                rings[0] = S_RING_CHASE_COLORS[pulseColorIndex];
-                pulseTimer = S_RING_CHASE_PULSE_FREQUENCY;
-                pulseRingIndex = 0;
-                pulseRingShiftTimer = 0;
-                pulseColorIndex = pulseColorIndex + 1 >= S_RING_CHASE_NUM_PULSE_COLORS ? 0 : pulseColorIndex + 1;
-            }
-            pulseTimer--;
         }
 };
 
