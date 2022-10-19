@@ -69,6 +69,10 @@
 // time (in ticks) to spend on each sequence
 #define SEQUENCE_DURATION 300
 
+// How many ticks ahead of the end of the sequence should we notify the sequence that it should prepare for a sequence transition
+// This is mostly used for things like preventing ring chase from pulsing immediately before we transition, to make it smoother
+#define WRAPUP_WARNING_OFFSET 20
+
 
 // -------------------- RING CHASE SEQUENCE CONFIG -------------------- //
 
@@ -153,6 +157,8 @@ class LEDSequence
     public:
         virtual ~LEDSequence() = 0;
         virtual void Update();
+        virtual void Init();
+        virtual void WrapUp();
 };
 
 LEDSequence::~LEDSequence() {}
@@ -179,6 +185,21 @@ class S_RingChase : public LEDSequence
             {
                 rings[i] = S_RING_CHASE_COLORS[pulseColorIndex];
             }
+        }
+
+        void Init() 
+        {
+            pulseTimer = 0;
+            pulseRingShiftTimer = 0;
+            pulseRingIndex = 0;
+            pulseColorIndex = S_RING_CHASE_NUM_PULSE_COLORS;
+        }
+
+        void WrapUp()
+        {
+            // prevent pulsing from happening right before a transition
+            // lets just fade out...
+            pulseTimer = 9999;
         }
 
         void Update()
@@ -236,6 +257,10 @@ class S_Twinkle : public LEDSequence
     public:   
         ~S_Twinkle() {}
 
+        void Init() {}
+
+        void WrapUp() {}
+
         void Update()
         {
             // is it time to twinkle?
@@ -279,7 +304,7 @@ class S_TraceChase : public LEDSequence
     public:   
         ~S_TraceChase() {}
 
-        S_TraceChase()
+        void Init() 
         {
             traces[0] = 0;
             for (int i = 1; i < NUM_STRIPS; i++)
@@ -287,6 +312,8 @@ class S_TraceChase : public LEDSequence
                 traces[i] = traces[i - 1] + S_TRACE_OFFSET;
             }
         }
+
+        void WrapUp() {}
 
         void Update()
         {
@@ -367,18 +394,28 @@ LEDSequence* Sequences[] = {
 int sequenceTimer = SEQUENCE_DURATION;
 int ledSequence = 0;
 
+void fadeAll()
+{
+    // apply constant falloff on entire strip
+    for (int i = 0; i < NUM_STRIPS *NUM_STRIP_LEDS; i++)
+    {
+        leds[i].nscale8(255 - S_TRACE_FALLOFF_RATE);
+    }
+}
+
 // -------------------- STARTUP -------------------- //
 
 void setup() 
 {
     // tell FastLED about our LEDs
     FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, NUM_STRIP_LEDS * NUM_STRIPS);
-
     FastLED.setBrightness(BRIGHTNESS);
 
     // clear all LEDS of any lingering state
     FastLED.clear();   
     FastLED.show();
+
+    Sequences[ledSequence]->Init();
 }
 
 
@@ -387,6 +424,11 @@ void setup()
 void loop() 
 {
     sequenceTimer--;
+    if (sequenceTimer == WRAPUP_WARNING_OFFSET)
+    {
+        Sequences[ledSequence]->WrapUp();
+    }   
+
     if (sequenceTimer < 0)
     {
         ledSequence++;
@@ -394,6 +436,7 @@ void loop()
         {
             ledSequence = 0;
         }
+        Sequences[ledSequence]->Init();
         sequenceTimer = SEQUENCE_DURATION;
     }
 
