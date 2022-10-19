@@ -58,6 +58,17 @@
 // Number of LEDs per strip (ring) in the light tunnel
 #define NUM_STRIP_LEDS 150
 
+// LED Brightness (0-255)
+#define BRIGHTNESS 255
+
+
+// If 1, expects strips to be connected in a Zig-Zag pattern
+// If 0, expects strips to be connected from the same side for each strip
+#define ZIG_ZAG 1
+
+// time (in ticks) to spend on each sequence
+#define SEQUENCE_DURATION 300
+
 
 // -------------------- RING CHASE SEQUENCE CONFIG -------------------- //
 
@@ -114,7 +125,7 @@ const CHSV S_TRACE_CHASE_COLORS[S_TRACE_CHASE_NUM_COLORS] = {
 };
 
 // trace brightness falloff intensity (how fast do the traces disappear?); larger == faster falloff
-const int S_TRACE_FALLOFF_RATE = 40;
+const int S_TRACE_FALLOFF_RATE = 75;
 
 // how many leds per tick should the trace advance? larger number == faster.
 const int S_TRACE_SPEED = 3;
@@ -129,11 +140,10 @@ const int S_TRACE_OFFSET = 15;
 CRGB leds[NUM_STRIP_LEDS * NUM_STRIPS];
 
 // get the index of the beginning of a strip by strip index
-int GetStrip(int stripIndex) { return stripIndex * NUM_STRIP_LEDS; }
-
-// control globals
-byte ledSequence = 2;           // stores which LED sequence we're currently in
-byte ledBrightness = 100;       // global brightness value to scale all modes by
+int GetStrip(int stripIndex) 
+{ 
+    return stripIndex * NUM_STRIP_LEDS; 
+}
 
 
 // -------------------- LED SEQUENCES -------------------- //
@@ -282,6 +292,36 @@ class S_TraceChase : public LEDSequence
         {
             for (int i = 0; i < NUM_STRIPS; i++)
             {
+#if ZIG_ZAG
+                // odd strips should iterate backwards
+                if (i % 2 == 1)
+                {
+                    for (int j = 0; j < S_TRACE_SPEED; j++)
+                    {
+                        traces[i]--;
+                        if (traces[i] < 0)
+                        {
+                            traces[i] = NUM_STRIP_LEDS - 1;
+                        }
+                        
+                        leds[GetStrip(i) + traces[i]] = S_TRACE_CHASE_COLORS[traceColorIndex];
+                    }
+                }
+                else
+                {
+                    // advance strip i as many leds as S_TRACE_SPEED
+                    for (int j = 0; j < S_TRACE_SPEED; j++)
+                    {
+                        traces[i]++;
+                        if (traces[i] > NUM_STRIP_LEDS - 1)
+                        {
+                            traces[i] = 0;
+                        }
+                        
+                        leds[GetStrip(i) + traces[i]] = S_TRACE_CHASE_COLORS[traceColorIndex];
+                    }
+                }    
+#else
                 // advance strip i as many leds as S_TRACE_SPEED
                 for (int j = 0; j < S_TRACE_SPEED; j++)
                 {
@@ -293,7 +333,7 @@ class S_TraceChase : public LEDSequence
                     
                     leds[GetStrip(i) + traces[i]] = S_TRACE_CHASE_COLORS[traceColorIndex];
                 }
-
+#endif // ZIG_ZAG
                 // only advance the trace color when we've finished updating this trace and are moving to the next strip
                 traceColorIndex++;
                 if (traceColorIndex > S_TRACE_CHASE_NUM_COLORS - 1)
@@ -317,12 +357,15 @@ class S_TraceChase : public LEDSequence
 // -------------------- LED SEQUENCES -------------------- //
 
 // LED Sequences to use
+const int NUM_SEQUENCES = 3;
 LEDSequence* Sequences[] = {
     new S_RingChase(),
     new S_Twinkle(),
     new S_TraceChase()
 };
 
+int sequenceTimer = SEQUENCE_DURATION;
+int ledSequence = 0;
 
 // -------------------- STARTUP -------------------- //
 
@@ -331,11 +374,11 @@ void setup()
     // tell FastLED about our LEDs
     FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, NUM_STRIP_LEDS * NUM_STRIPS);
 
-    FastLED.setBrightness(ledBrightness);
+    FastLED.setBrightness(BRIGHTNESS);
 
     // clear all LEDS of any lingering state
     FastLED.clear();   
-    FastLED.show(); 
+    FastLED.show();
 }
 
 
@@ -343,6 +386,17 @@ void setup()
 
 void loop() 
 {
+    sequenceTimer--;
+    if (sequenceTimer < 0)
+    {
+        ledSequence++;
+        if (ledSequence > NUM_SEQUENCES - 1)
+        {
+            ledSequence = 0;
+        }
+        sequenceTimer = SEQUENCE_DURATION;
+    }
+
     Sequences[ledSequence]->Update();
     FastLED.show();
 }
