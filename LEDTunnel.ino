@@ -72,14 +72,55 @@ const CHSV S_RING_CHASE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = {
 };
 
 // frequency at which new pulses occur; larger == less frequent
-const int S_RING_CHASE_PULSE_FREQUENCY = 40;
+const int S_RING_CHASE_PULSE_FREQUENCY = 30;
 
 // pulse brightness falloff intensity (how fast does the pulse disappear?); larger == faster falloff
 const int S_RING_CHASE_FALLOF_RATE = 8;
 
 // ring shift frequency (frequency in ticks at which the pulse is echoed down the tunnel); larger == more delay (longer "echo")
-const int S_RING_CHASE_RING_SHIFT_FREQUENCY = 1;
+const int S_RING_CHASE_RING_SHIFT_FREQUENCY = 2;
 
+
+// -------------------- TWINKLE SEQUENCE CONFIG -------------------- //
+
+// number of pulse colors to use
+const int S_TWINKLE_NUM_COLORS = 1;
+
+// pulse colors to cycle through during ring chase
+const CHSV S_TWINKLE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = { 
+    CHSV(190, 255, 255),
+};
+
+// frequency at which twinkles occur; larger == less frequent
+const int S_TWINKLE_FREQUENCY = 3;
+
+// twinkle brightness falloff intensity (how fast does the twinkle disappear?); larger == faster falloff
+const int S_TWINKLE_FALLOFF_RATE = 10;
+
+// twinkle brightness variance; larger == more deviance from max brightness (0-512)
+const int S_TWINKLE_BRIGHTNESS_VARIANCE = 100;
+
+
+// -------------------- TRACE CHASE SEQUENCE CONFIG -------------------- //
+
+// number of trace colors to use
+const int S_TRACE_CHASE_NUM_COLORS = 3;
+
+// pulse colors to cycle through during trace chase
+const CHSV S_TRACE_CHASE_COLORS[S_TRACE_CHASE_NUM_COLORS] = { 
+    CHSV(190, 255, 255), 
+    CHSV(30, 255, 255), 
+    CHSV(96, 255, 255) 
+};
+
+// trace brightness falloff intensity (how fast do the traces disappear?); larger == faster falloff
+const int S_TRACE_FALLOFF_RATE = 40;
+
+// how many leds per tick should the trace advance? larger number == faster.
+const int S_TRACE_SPEED = 3;
+
+// how many LEDs should each ring's trace be offset from the previous?
+const int S_TRACE_OFFSET = 15;
 
 
 // -------------------- Globals -------------------- //
@@ -91,7 +132,7 @@ CRGB leds[NUM_STRIP_LEDS * NUM_STRIPS];
 int GetStrip(int stripIndex) { return stripIndex * NUM_STRIP_LEDS; }
 
 // control globals
-byte ledSequence = 0;           // stores which LED sequence we're currently in
+byte ledSequence = 2;           // stores which LED sequence we're currently in
 byte ledBrightness = 100;       // global brightness value to scale all modes by
 
 
@@ -106,6 +147,7 @@ class LEDSequence
 
 LEDSequence::~LEDSequence() {}
 
+
 // ==================== S_RingChase ==================== //
 
 class S_RingChase : public LEDSequence
@@ -116,10 +158,11 @@ class S_RingChase : public LEDSequence
         int pulseTimer = 0;
         int pulseRingShiftTimer = 0;
         int pulseRingIndex = 0;
-        int pulseColorIndex = 0;
+        int pulseColorIndex = S_RING_CHASE_NUM_PULSE_COLORS;
 
     public:   
         ~S_RingChase() {}
+
         S_RingChase()
         {
             for (int i = 0; i < NUM_STRIPS; i++)
@@ -127,17 +170,18 @@ class S_RingChase : public LEDSequence
                 rings[i] = S_RING_CHASE_COLORS[pulseColorIndex];
             }
         }
+
         void Update()
         {
             // is it time to start another pulse chain?
             if (pulseTimer <= 0)
             {
                 // Pulse!
-                rings[0] = S_RING_CHASE_COLORS[pulseColorIndex];
                 pulseTimer = S_RING_CHASE_PULSE_FREQUENCY;
-                pulseRingIndex = 0;
-                pulseRingShiftTimer = 0;
+                pulseRingIndex = 1;
+                pulseRingShiftTimer = S_RING_CHASE_RING_SHIFT_FREQUENCY;
                 pulseColorIndex = pulseColorIndex + 1 >= S_RING_CHASE_NUM_PULSE_COLORS ? 0 : pulseColorIndex + 1;
+                rings[0] = S_RING_CHASE_COLORS[pulseColorIndex];
             }
             pulseTimer--;
 
@@ -159,6 +203,8 @@ class S_RingChase : public LEDSequence
                     rings[i].s, 
                     rings[i].v - S_RING_CHASE_FALLOF_RATE < 0 ? 0 : rings[i].v - S_RING_CHASE_FALLOF_RATE);
             }
+
+            // set actual leds to ring states
             for (int i = 0; i < NUM_STRIPS; i++)
             {
                 for (int j = 0; j < NUM_STRIP_LEDS; j++)
@@ -170,11 +216,111 @@ class S_RingChase : public LEDSequence
 };
 
 
+// ==================== S_Twinkle ==================== //
+
+class S_Twinkle : public LEDSequence
+{
+    private:
+        int twinkleTimer = 0;
+
+    public:   
+        ~S_Twinkle() {}
+
+        void Update()
+        {
+            // is it time to twinkle?
+            if (twinkleTimer <= 0)
+            {
+                // Twinkle!
+                twinkleTimer = S_TWINKLE_FREQUENCY;
+                int pos = random(1, NUM_STRIPS * NUM_STRIP_LEDS - 2);
+                int brightness = random(400 - S_TWINKLE_BRIGHTNESS_VARIANCE, 400);
+                CHSV color = S_TWINKLE_COLORS[random(S_TWINKLE_NUM_COLORS)];
+                if (brightness > 255)
+                {
+                    leds[pos + 1] = CHSV(color.h, color.s, brightness - 255);
+                    leds[pos - 1] = CHSV(color.h, color.s, brightness - 255);
+                    leds[pos] = color;
+                }
+                else
+                {
+                    leds[pos] = CHSV(color.h, color.s, brightness);
+                }
+            }
+            twinkleTimer--;
+
+            // apply constant falloff on entire strip
+            for (int i = 0; i < NUM_STRIPS *NUM_STRIP_LEDS; i++)
+            {
+                leds[i].nscale8(255 - S_TWINKLE_FALLOFF_RATE);
+            }
+        }
+};
+
+
+// ==================== S_TraceChase ==================== //
+
+class S_TraceChase : public LEDSequence
+{
+    private:
+        int traces[NUM_STRIPS];
+        int traceColorIndex = 0;
+
+    public:   
+        ~S_TraceChase() {}
+
+        S_TraceChase()
+        {
+            traces[0] = 0;
+            for (int i = 1; i < NUM_STRIPS; i++)
+            {
+                traces[i] = traces[i - 1] + S_TRACE_OFFSET;
+            }
+        }
+
+        void Update()
+        {
+            for (int i = 0; i < NUM_STRIPS; i++)
+            {
+                // advance strip i as many leds as S_TRACE_SPEED
+                for (int j = 0; j < S_TRACE_SPEED; j++)
+                {
+                    traces[i]++;
+                    if (traces[i] > NUM_STRIP_LEDS - 1)
+                    {
+                        traces[i] = 0;
+                    }
+                    
+                    leds[GetStrip(i) + traces[i]] = S_TRACE_CHASE_COLORS[traceColorIndex];
+                }
+
+                // only advance the trace color when we've finished updating this trace and are moving to the next strip
+                traceColorIndex++;
+                if (traceColorIndex > S_TRACE_CHASE_NUM_COLORS - 1)
+                {
+                    traceColorIndex = 0;
+                }
+            }
+
+            // always apply the same color on the same strip (strip 0 is always color 0)
+            traceColorIndex = 0; 
+
+            // apply constant falloff on entire strip
+            for (int i = 0; i < NUM_STRIPS *NUM_STRIP_LEDS; i++)
+            {
+                leds[i].nscale8(255 - S_TRACE_FALLOFF_RATE);
+            }
+        }
+};
+
+
 // -------------------- LED SEQUENCES -------------------- //
 
 // LED Sequences to use
 LEDSequence* Sequences[] = {
-    new S_RingChase()
+    new S_RingChase(),
+    new S_Twinkle(),
+    new S_TraceChase()
 };
 
 
