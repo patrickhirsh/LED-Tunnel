@@ -129,7 +129,7 @@ const CHSV S_TRACE_CHASE_COLORS[S_TRACE_CHASE_NUM_COLORS] = {
 };
 
 // trace brightness falloff intensity (how fast do the traces disappear?); larger == faster falloff
-const int S_TRACE_FALLOFF_RATE = 40;
+const int S_TRACE_FALLOFF_RATE = 25;
 
 // how many leds per tick should the trace advance? larger number == faster.
 const int S_TRACE_SPEED = 3;
