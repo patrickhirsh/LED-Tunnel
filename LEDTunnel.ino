@@ -87,7 +87,7 @@ const CHSV S_RING_CHASE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = {
 };
 
 // frequency at which new pulses occur; larger == less frequent
-const int S_RING_CHASE_PULSE_FREQUENCY = 30;
+const int S_RING_CHASE_PULSE_FREQUENCY = 45;
 
 // pulse brightness falloff intensity (how fast does the pulse disappear?); larger == faster falloff
 const int S_RING_CHASE_FALLOF_RATE = 8;
@@ -107,12 +107,12 @@ const CHSV S_TWINKLE_COLORS[S_RING_CHASE_NUM_PULSE_COLORS] = {
 };
 
 // frequency at which twinkles occur; larger == less frequent
-const int S_TWINKLE_FREQUENCY = 3;
+const int S_TWINKLE_FREQUENCY = 2;
 
 // twinkle brightness falloff intensity (how fast does the twinkle disappear?); larger == faster falloff
 const int S_TWINKLE_FALLOFF_RATE = 10;
 
-// twinkle brightness variance; larger == more deviance from max brightness (0-512)
+// twinkle brightness variance; larger == more deviance from max brightness (0-255)
 const int S_TWINKLE_BRIGHTNESS_VARIANCE = 100;
 
 
@@ -129,7 +129,7 @@ const CHSV S_TRACE_CHASE_COLORS[S_TRACE_CHASE_NUM_COLORS] = {
 };
 
 // trace brightness falloff intensity (how fast do the traces disappear?); larger == faster falloff
-const int S_TRACE_FALLOFF_RATE = 75;
+const int S_TRACE_FALLOFF_RATE = 40;
 
 // how many leds per tick should the trace advance? larger number == faster.
 const int S_TRACE_SPEED = 3;
@@ -269,18 +269,9 @@ class S_Twinkle : public LEDSequence
                 // Twinkle!
                 twinkleTimer = S_TWINKLE_FREQUENCY;
                 int pos = random(1, NUM_STRIPS * NUM_STRIP_LEDS - 2);
-                int brightness = random(400 - S_TWINKLE_BRIGHTNESS_VARIANCE, 400);
+                int brightness = random(255 - S_TWINKLE_BRIGHTNESS_VARIANCE, 255);
                 CHSV color = S_TWINKLE_COLORS[random(S_TWINKLE_NUM_COLORS)];
-                if (brightness > 255)
-                {
-                    leds[pos + 1] = CHSV(color.h, color.s, brightness - 255);
-                    leds[pos - 1] = CHSV(color.h, color.s, brightness - 255);
-                    leds[pos] = color;
-                }
-                else
-                {
                     leds[pos] = CHSV(color.h, color.s, brightness);
-                }
             }
             twinkleTimer--;
 
@@ -307,10 +298,25 @@ class S_TraceChase : public LEDSequence
         void Init() 
         {
             traces[0] = 0;
+#if ZIG_ZAG
             for (int i = 1; i < NUM_STRIPS; i++)
             {
-                traces[i] = traces[i - 1] + S_TRACE_OFFSET;
+                if (i % 2 == 1)
+                {
+                    traces[i] = NUM_STRIP_LEDS - i * S_TRACE_OFFSET;
+                }
+                else 
+                {
+                    traces[i] = i * S_TRACE_OFFSET;
+                }
+                
             }
+#else
+            for (int i = 1; i < NUM_STRIPS; i++)
+            {
+                traces[i] = i * S_TRACE_OFFSET;
+            }
+#endif
         }
 
         void WrapUp() {}
